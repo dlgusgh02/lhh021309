@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ProfitabilityBadge } from "@/components/recipes/profitability-badge";
-import { analyzeProfitability } from "@/lib/calculations";
+import { analyzeProfitability, calculatePriceByDesiredProfit } from "@/lib/calculations";
 import { formatKRW } from "@/lib/utils/currency";
 import { formatPercentage } from "@/lib/utils/percentage";
 
@@ -16,6 +16,10 @@ const POINTS = 6;
 export function PriceSimulator() {
   const [cost, setCost] = useState(3000);
   const [basePrice, setBasePrice] = useState(10000);
+  const [desiredProfit, setDesiredProfit] = useState(5000);
+
+  const priceForDesiredProfit =
+    cost >= 0 && desiredProfit >= 0 ? calculatePriceByDesiredProfit(cost, desiredProfit) : null;
 
   const rows = useMemo(() => {
     if (cost <= 0 || basePrice <= 0) return [];
@@ -46,6 +50,29 @@ export function PriceSimulator() {
               value={basePrice || ""}
               onChange={(e) => setBasePrice(Number(e.target.value))}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">목표 이익 금액으로 판매가 계산</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-end">
+          <div className="space-y-1">
+            <Label>원하는 이익 금액</Label>
+            <Input
+              type="number"
+              min={0}
+              value={desiredProfit || ""}
+              onChange={(e) => setDesiredProfit(Number(e.target.value))}
+            />
+          </div>
+          <div className="rounded-md bg-muted px-4 py-2 text-sm">
+            필요 판매가:{" "}
+            <span className="font-semibold text-primary">
+              {priceForDesiredProfit !== null ? formatKRW(priceForDesiredProfit) : "-"}
+            </span>
           </div>
         </CardContent>
       </Card>

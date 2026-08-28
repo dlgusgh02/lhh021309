@@ -17,7 +17,12 @@ export function formatCurrency(amount: number, currency: string = "KRW"): string
   }).format(Math.round(amount));
 }
 
-/** Plain "₩12,500" without relying on Intl currency symbol placement quirks. */
+/**
+ * Convenience alias for the common case (KRW is the only currency the MVP
+ * actually exercises today — see TRD §36 for planned multi-currency support).
+ * Delegates to `formatCurrency` so there is a single formatting
+ * implementation, not two.
+ */
 export function formatKRW(amount: number): string {
-  return `₩${Math.round(amount).toLocaleString("ko-KR")}`;
+  return formatCurrency(amount, "KRW");
 }

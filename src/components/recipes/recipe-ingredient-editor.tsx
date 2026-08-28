@@ -7,9 +7,9 @@ import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { UnitSelect } from "@/components/common/unit-select";
+import { IngredientCombobox } from "@/components/ingredients/ingredient-combobox";
 import { calculateUsageCostFromPurchase, IncompatibleUnitError } from "@/lib/calculations";
 import { formatKRW } from "@/lib/utils/currency";
 import { addRecipeIngredient, removeRecipeIngredient } from "@/actions/recipe-actions";
@@ -152,18 +152,11 @@ export function RecipeIngredientEditor({
         <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-1">
             <label className="text-xs text-muted-foreground">식재료</label>
-            <Select value={ingredientId} onValueChange={(v) => setIngredientId(v ?? "")}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="식재료 선택" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableIngredients.map((ing) => (
-                  <SelectItem key={ing.id} value={ing.id}>
-                    {ing.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <IngredientCombobox
+              ingredients={availableIngredients}
+              value={ingredientId}
+              onChange={setIngredientId}
+            />
           </div>
           <div className="w-full space-y-1 sm:w-28">
             <label className="text-xs text-muted-foreground">사용량</label>
