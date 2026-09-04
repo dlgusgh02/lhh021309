@@ -122,6 +122,42 @@ create index if not exists ingredient_price_history_ingredient_id_idx
   on public.ingredient_price_history (ingredient_id);
 
 -- ---------------------------------------------------------------------------
+-- master_ingredients: shared, admin-managed catalog synced from the KAMIS
+-- (농산물유통정보) public price API. NOT store-scoped -- every authenticated
+-- user can browse it read-only and copy an entry into their own
+-- `ingredients` table (which pre-fills name/unit/a reference price they can
+-- adjust to what they actually pay). Only the sync job (service-role key,
+-- bypasses RLS) writes to this table.
+-- ---------------------------------------------------------------------------
+create table if not exists public.master_ingredients (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  category text not null default 'etc',
+  reference_unit text not null,
+  -- KAMIS API item/kind/category codes this row's price is fetched with
+  -- (see src/lib/kamis/item-map.ts). NULL until an admin maps this item.
+  kamis_item_code text,
+  kamis_kind_code text,
+  kamis_category_code text,
+  -- Last price pulled from KAMIS, in KRW per `reference_unit`. NULL until
+  -- the sync job has run at least once for this item.
+  reference_price bigint check (reference_price is null or reference_price >= 0),
+  price_updated_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists master_ingredients_name_idx on public.master_ingredients (name);
+
+alter table public.master_ingredients enable row level security;
+
+drop policy if exists "master_ingredients_select_authenticated" on public.master_ingredients;
+create policy "master_ingredients_select_authenticated" on public.master_ingredients
+  for select using (auth.role() = 'authenticated');
+-- No insert/update/delete policy for regular users: this table is
+-- maintained only by the sync job via the service-role key, which bypasses
+-- RLS entirely.
+
+-- ---------------------------------------------------------------------------
 -- updated_at triggers
 -- ---------------------------------------------------------------------------
 create or replace function public.set_updated_at()

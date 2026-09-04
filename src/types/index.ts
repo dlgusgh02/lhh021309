@@ -55,6 +55,16 @@ export interface Ingredient {
   updatedAt: string;
 }
 
+/** A shared, admin-synced catalog entry (from the KAMIS public price API) — not store-owned. */
+export interface MasterIngredient {
+  id: string;
+  name: string;
+  category: string;
+  referenceUnit: string;
+  referencePrice: number | null;
+  priceUpdatedAt: string | null;
+}
+
 export interface IngredientPriceHistory {
   id: string;
   ingredientId: string;

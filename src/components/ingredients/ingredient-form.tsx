@@ -13,6 +13,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { CurrencyInput } from "@/components/common/currency-input";
 import { PercentageInput } from "@/components/common/percentage-input";
 import { UnitSelect } from "@/components/common/unit-select";
+import { MasterIngredientPicker } from "@/components/ingredients/master-ingredient-picker";
 import {
   ingredientFormSchema,
   type IngredientFormInput,
@@ -22,7 +23,7 @@ import { calculateEffectiveUnitCost } from "@/lib/calculations";
 import { formatKRW } from "@/lib/utils/currency";
 import { INGREDIENT_CATEGORIES } from "@/types";
 import { createIngredient, updateIngredient } from "@/actions/ingredient-actions";
-import type { Ingredient } from "@/types";
+import type { Ingredient, MasterIngredient } from "@/types";
 
 export function IngredientForm({ ingredient }: { ingredient?: Ingredient }) {
   const router = useRouter();
@@ -61,6 +62,17 @@ export function IngredientForm({ ingredient }: { ingredient?: Ingredient }) {
     }
   }
 
+  function handleImportFromMaster(item: MasterIngredient) {
+    form.reset({
+      ...form.getValues(),
+      name: item.name,
+      category: item.category,
+      purchaseUnit: item.referenceUnit,
+      purchasePrice: item.referencePrice ?? 0,
+      purchaseQuantity: 1,
+    });
+  }
+
   function onSubmit(values: IngredientFormValues) {
     startTransition(async () => {
       const formData = new FormData();
@@ -82,6 +94,11 @@ export function IngredientForm({ ingredient }: { ingredient?: Ingredient }) {
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      {!ingredient && (
+        <div className="flex justify-end">
+          <MasterIngredientPicker onSelect={handleImportFromMaster} />
+        </div>
+      )}
       <FieldGroup>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Controller

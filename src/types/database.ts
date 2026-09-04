@@ -250,6 +250,45 @@ export interface IngredientPriceHistoryUpdate {
   recorded_at?: string;
 }
 
+export interface MasterIngredientRow {
+  id: string;
+  name: string;
+  category: string;
+  reference_unit: string;
+  kamis_item_code: string | null;
+  kamis_kind_code: string | null;
+  kamis_category_code: string | null;
+  reference_price: number | null;
+  price_updated_at: string | null;
+  created_at: string;
+}
+
+export interface MasterIngredientInsert {
+  id?: string;
+  name: string;
+  category?: string;
+  reference_unit: string;
+  kamis_item_code?: string | null;
+  kamis_kind_code?: string | null;
+  kamis_category_code?: string | null;
+  reference_price?: number | null;
+  price_updated_at?: string | null;
+  created_at?: string;
+}
+
+export interface MasterIngredientUpdate {
+  id?: string;
+  name?: string;
+  category?: string;
+  reference_unit?: string;
+  kamis_item_code?: string | null;
+  kamis_kind_code?: string | null;
+  kamis_category_code?: string | null;
+  reference_price?: number | null;
+  price_updated_at?: string | null;
+  created_at?: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -293,6 +332,12 @@ export interface Database {
         Row: Prettify<IngredientPriceHistoryRow>;
         Insert: Prettify<IngredientPriceHistoryInsert>;
         Update: Prettify<IngredientPriceHistoryUpdate>;
+        Relationships: [];
+      };
+      master_ingredients: {
+        Row: Prettify<MasterIngredientRow>;
+        Insert: Prettify<MasterIngredientInsert>;
+        Update: Prettify<MasterIngredientUpdate>;
         Relationships: [];
       };
     };
