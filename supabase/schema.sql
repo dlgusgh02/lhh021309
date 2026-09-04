@@ -152,7 +152,9 @@ alter table public.master_ingredients enable row level security;
 
 drop policy if exists "master_ingredients_select_authenticated" on public.master_ingredients;
 create policy "master_ingredients_select_authenticated" on public.master_ingredients
-  for select using (auth.role() = 'authenticated');
+  for select
+  to authenticated
+  using (true);
 -- No insert/update/delete policy for regular users: this table is
 -- maintained only by the sync job via the service-role key, which bypasses
 -- RLS entirely.
@@ -200,104 +202,104 @@ alter table public.ingredient_price_history enable row level security;
 -- profiles: a user can only see/edit their own profile row
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles
-  for select using (auth.uid() = id);
+  for select to authenticated using ((select auth.uid()) = id);
 
 drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles
-  for update using (auth.uid() = id);
+  for update to authenticated using ((select auth.uid()) = id);
 
 drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own" on public.profiles
-  for insert with check (auth.uid() = id);
+  for insert to authenticated with check ((select auth.uid()) = id);
 
 -- stores: owned directly by user_id
 drop policy if exists "stores_all_own" on public.stores;
 create policy "stores_all_own" on public.stores
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
 -- ingredients: owned via store.user_id
 drop policy if exists "ingredients_all_own" on public.ingredients;
 create policy "ingredients_all_own" on public.ingredients
-  for all using (
+  for all to authenticated using (
     exists (
       select 1 from public.stores s
-      where s.id = ingredients.store_id and s.user_id = auth.uid()
+      where s.id = ingredients.store_id and s.user_id = (select auth.uid())
     )
   )
   with check (
     exists (
       select 1 from public.stores s
-      where s.id = ingredients.store_id and s.user_id = auth.uid()
+      where s.id = ingredients.store_id and s.user_id = (select auth.uid())
     )
   );
 
 -- recipes: owned via store.user_id
 drop policy if exists "recipes_all_own" on public.recipes;
 create policy "recipes_all_own" on public.recipes
-  for all using (
+  for all to authenticated using (
     exists (
       select 1 from public.stores s
-      where s.id = recipes.store_id and s.user_id = auth.uid()
+      where s.id = recipes.store_id and s.user_id = (select auth.uid())
     )
   )
   with check (
     exists (
       select 1 from public.stores s
-      where s.id = recipes.store_id and s.user_id = auth.uid()
+      where s.id = recipes.store_id and s.user_id = (select auth.uid())
     )
   );
 
 -- recipe_ingredients: owned via recipe -> store.user_id
 drop policy if exists "recipe_ingredients_all_own" on public.recipe_ingredients;
 create policy "recipe_ingredients_all_own" on public.recipe_ingredients
-  for all using (
+  for all to authenticated using (
     exists (
       select 1 from public.recipes r
       join public.stores s on s.id = r.store_id
-      where r.id = recipe_ingredients.recipe_id and s.user_id = auth.uid()
+      where r.id = recipe_ingredients.recipe_id and s.user_id = (select auth.uid())
     )
   )
   with check (
     exists (
       select 1 from public.recipes r
       join public.stores s on s.id = r.store_id
-      where r.id = recipe_ingredients.recipe_id and s.user_id = auth.uid()
+      where r.id = recipe_ingredients.recipe_id and s.user_id = (select auth.uid())
     )
   );
 
 -- extra_costs: owned via recipe -> store.user_id
 drop policy if exists "extra_costs_all_own" on public.extra_costs;
 create policy "extra_costs_all_own" on public.extra_costs
-  for all using (
+  for all to authenticated using (
     exists (
       select 1 from public.recipes r
       join public.stores s on s.id = r.store_id
-      where r.id = extra_costs.recipe_id and s.user_id = auth.uid()
+      where r.id = extra_costs.recipe_id and s.user_id = (select auth.uid())
     )
   )
   with check (
     exists (
       select 1 from public.recipes r
       join public.stores s on s.id = r.store_id
-      where r.id = extra_costs.recipe_id and s.user_id = auth.uid()
+      where r.id = extra_costs.recipe_id and s.user_id = (select auth.uid())
     )
   );
 
 -- ingredient_price_history: owned via ingredient -> store.user_id
 drop policy if exists "ingredient_price_history_all_own" on public.ingredient_price_history;
 create policy "ingredient_price_history_all_own" on public.ingredient_price_history
-  for all using (
+  for all to authenticated using (
     exists (
       select 1 from public.ingredients i
       join public.stores s on s.id = i.store_id
-      where i.id = ingredient_price_history.ingredient_id and s.user_id = auth.uid()
+      where i.id = ingredient_price_history.ingredient_id and s.user_id = (select auth.uid())
     )
   )
   with check (
     exists (
       select 1 from public.ingredients i
       join public.stores s on s.id = i.store_id
-      where i.id = ingredient_price_history.ingredient_id and s.user_id = auth.uid()
+      where i.id = ingredient_price_history.ingredient_id and s.user_id = (select auth.uid())
     )
   );
 
