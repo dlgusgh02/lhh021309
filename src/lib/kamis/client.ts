@@ -48,7 +48,7 @@ export async function fetchDailyPricesByCategory(
 ): Promise<KamisDailyPriceItem[]> {
   const params = new URLSearchParams({
     action: "dailyPriceByCategoryList",
-    p_product_cls_code: "02", // 02 = 소매(retail); 01 = 도매(wholesale)
+    p_product_cls_code: "01", // 01 = 소매(retail); 02 = 도매(wholesale) — verified against KAMIS's PeriodProductList param docs
     p_item_category_code: categoryCode,
     p_country_code: "1101", // 서울 — used as the national reference price
     p_regday: regday,
