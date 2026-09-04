@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStoreId } from "@/lib/supabase/dal";
 import { ingredientFormSchema, type IngredientFormValues } from "@/lib/validations/ingredient";
-import type { ActionResult, Ingredient } from "@/types";
-import type { IngredientRow } from "@/types/database";
+import type { ActionResult, Ingredient, IngredientPriceHistory } from "@/types";
+import type { IngredientPriceHistoryRow, IngredientRow } from "@/types/database";
 
 function toIngredient(row: IngredientRow): Ingredient {
   return {
@@ -57,6 +57,34 @@ export async function getIngredient(id: string): Promise<ActionResult<Ingredient
     return { success: true, data: toIngredient(data as IngredientRow) };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "식재료를 불러오지 못했습니다." };
+  }
+}
+
+function toPriceHistory(row: IngredientPriceHistoryRow): IngredientPriceHistory {
+  return {
+    id: row.id,
+    ingredientId: row.ingredient_id,
+    purchasePrice: row.purchase_price,
+    purchaseQuantity: Number(row.purchase_quantity),
+    purchaseUnit: row.purchase_unit,
+    recordedAt: row.recorded_at,
+  };
+}
+
+export async function getIngredientPriceHistory(id: string): Promise<ActionResult<IngredientPriceHistory[]>> {
+  try {
+    await requireStoreId();
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("ingredient_price_history")
+      .select("*")
+      .eq("ingredient_id", id)
+      .order("recorded_at", { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: (data as IngredientPriceHistoryRow[]).map(toPriceHistory) };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "가격 이력을 불러오지 못했습니다." };
   }
 }
 

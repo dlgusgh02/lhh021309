@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChefHat, Search } from "lucide-react";
+import { ChefHat, Search, Star } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProfitabilityBadge } from "@/components/recipes/profitability-badge";
+import { FavoriteButton } from "@/components/recipes/favorite-button";
+import { cn } from "@/lib/utils";
 import { formatKRW } from "@/lib/utils/currency";
 import { formatPercentage } from "@/lib/utils/percentage";
 import { RECIPE_CATEGORIES } from "@/types";
@@ -26,11 +28,15 @@ function categoryLabel(value: string) {
 
 export function RecipeTable({ rows }: { rows: RecipeTableRow[] }) {
   const [query, setQuery] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
-  const filtered = useMemo(
-    () => rows.filter((r) => r.recipe.name.toLowerCase().includes(query.trim().toLowerCase())),
-    [rows, query],
-  );
+  const filtered = useMemo(() => {
+    const matched = rows
+      .filter((r) => r.recipe.name.toLowerCase().includes(query.trim().toLowerCase()))
+      .filter((r) => !favoritesOnly || r.recipe.isFavorite);
+    // Stable sort: favorites first, otherwise keep the incoming (updated_at desc) order.
+    return [...matched].sort((a, b) => Number(b.recipe.isFavorite) - Number(a.recipe.isFavorite));
+  }, [rows, query, favoritesOnly]);
 
   if (rows.length === 0) {
     return (
@@ -49,15 +55,29 @@ export function RecipeTable({ rows }: { rows: RecipeTableRow[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="relative max-w-sm">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="레시피명 검색" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-8" />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="레시피명 검색" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-8" />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-pressed={favoritesOnly}
+          onClick={() => setFavoritesOnly((v) => !v)}
+          className={cn(favoritesOnly && "border-amber-400 text-amber-600")}
+        >
+          <Star className={cn("size-4", favoritesOnly && "fill-amber-400 text-amber-400")} />
+          즐겨찾기만
+        </Button>
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10" />
               <TableHead>메뉴명</TableHead>
               <TableHead>카테고리</TableHead>
               <TableHead className="text-right">최종 원가</TableHead>
@@ -70,6 +90,9 @@ export function RecipeTable({ rows }: { rows: RecipeTableRow[] }) {
           <TableBody>
             {filtered.map(({ recipe, result }) => (
               <TableRow key={recipe.id}>
+                <TableCell>
+                  <FavoriteButton id={recipe.id} name={recipe.name} isFavorite={recipe.isFavorite} />
+                </TableCell>
                 <TableCell className="font-medium">
                   <Link href={`/recipes/${recipe.id}`} className="hover:underline">
                     {recipe.name}

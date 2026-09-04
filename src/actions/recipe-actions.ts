@@ -217,6 +217,89 @@ export async function updateSellingPrice(id: string, formData: FormData): Promis
   }
 }
 
+export async function duplicateRecipe(id: string): Promise<ActionResult<{ id: string }>> {
+  try {
+    const storeId = await requireStoreId();
+    const supabase = await createClient();
+
+    const { data: source, error: fetchError } = await supabase
+      .from("recipes")
+      .select(RECIPE_SELECT)
+      .eq("id", id)
+      .eq("store_id", storeId)
+      .single();
+
+    if (fetchError || !source) return { success: false, error: "레시피를 찾을 수 없습니다." };
+    const original = source as unknown as RecipeRowWithJoins;
+
+    const { data: copy, error: insertError } = await supabase
+      .from("recipes")
+      .insert({
+        store_id: storeId,
+        name: `${original.name} (복사본)`,
+        category: original.category,
+        description: original.description,
+        servings: original.servings,
+        selling_price: original.selling_price,
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !copy) return { success: false, error: insertError?.message ?? "레시피 복제에 실패했습니다." };
+    const newId = copy.id as string;
+
+    if (original.recipe_ingredients.length > 0) {
+      const { error } = await supabase.from("recipe_ingredients").insert(
+        original.recipe_ingredients.map((ri) => ({
+          recipe_id: newId,
+          ingredient_id: ri.ingredient_id,
+          quantity: ri.quantity,
+          unit: ri.unit,
+        })),
+      );
+      if (error) return { success: false, error: error.message };
+    }
+
+    if (original.extra_costs.length > 0) {
+      const { error } = await supabase.from("extra_costs").insert(
+        original.extra_costs.map((ec) => ({
+          recipe_id: newId,
+          name: ec.name,
+          amount: ec.amount,
+          cost_type: ec.cost_type,
+        })),
+      );
+      if (error) return { success: false, error: error.message };
+    }
+
+    revalidatePath("/recipes");
+    return { success: true, data: { id: newId } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "레시피 복제에 실패했습니다." };
+  }
+}
+
+export async function toggleFavorite(id: string, isFavorite: boolean): Promise<ActionResult<null>> {
+  try {
+    const storeId = await requireStoreId();
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("recipes")
+      .update({ is_favorite: isFavorite })
+      .eq("id", id)
+      .eq("store_id", storeId);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/recipes");
+    revalidatePath(`/recipes/${id}`);
+    revalidatePath("/dashboard");
+    return { success: true, data: null };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "즐겨찾기 설정에 실패했습니다." };
+  }
+}
+
 export async function deleteRecipe(id: string): Promise<ActionResult<null>> {
   try {
     const storeId = await requireStoreId();

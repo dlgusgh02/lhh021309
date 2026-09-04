@@ -59,7 +59,13 @@ export function ExtraCostEditor({ recipeId, extraCosts }: { recipeId: string; ex
             <span>{ec.name}</span>
             <div className="flex items-center gap-3">
               <span className="font-medium">{formatKRW(ec.amount)}</span>
-              <Button variant="ghost" size="icon" disabled={isPending} onClick={() => handleRemove(ec.id)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isPending}
+                onClick={() => handleRemove(ec.id)}
+                aria-label={`${ec.name} 삭제`}
+              >
                 <Trash2 className="size-4" />
               </Button>
             </div>

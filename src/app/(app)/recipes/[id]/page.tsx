@@ -12,6 +12,8 @@ import { RecipeCostSummary } from "@/components/recipes/recipe-cost-summary";
 import { PricingRecommendationCard } from "@/components/recipes/pricing-recommendation-card";
 import { SellingPriceForm } from "@/components/recipes/selling-price-form";
 import { DeleteRecipeButton } from "@/components/recipes/delete-recipe-button";
+import { FavoriteButton } from "@/components/recipes/favorite-button";
+import { DuplicateRecipeButton } from "@/components/recipes/duplicate-recipe-button";
 import { getRecipe } from "@/actions/recipe-actions";
 import { getIngredients } from "@/actions/ingredient-actions";
 import { computeRecipeSummary } from "@/lib/recipes/recipe-summary";
@@ -51,10 +53,12 @@ export default async function RecipeDetailPage({
         description={recipe.description ?? undefined}
         action={
           <div className="flex items-center gap-2">
+            <FavoriteButton id={recipe.id} name={recipe.name} isFavorite={recipe.isFavorite} />
             <Button variant="outline" render={<Link href={`/recipes/${recipe.id}/edit`} />} nativeButton={false}>
               <Pencil className="size-4" />
               기본 정보 수정
             </Button>
+            <DuplicateRecipeButton id={recipe.id} />
             <DeleteRecipeButton id={recipe.id} name={recipe.name} />
           </div>
         }

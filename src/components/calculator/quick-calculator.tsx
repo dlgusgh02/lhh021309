@@ -111,6 +111,7 @@ export function QuickCalculator() {
                       size="icon"
                       onClick={() => removeLine(line.id)}
                       disabled={lines.length === 1}
+                      aria-label={`재료 ${index + 1} 삭제`}
                     >
                       <Trash2 className="size-4" />
                     </Button>

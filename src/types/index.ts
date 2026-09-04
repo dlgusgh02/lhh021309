@@ -55,6 +55,15 @@ export interface Ingredient {
   updatedAt: string;
 }
 
+export interface IngredientPriceHistory {
+  id: string;
+  ingredientId: string;
+  purchasePrice: number;
+  purchaseQuantity: number;
+  purchaseUnit: string;
+  recordedAt: string;
+}
+
 export interface RecipeIngredient {
   id: string;
   recipeId: string;
