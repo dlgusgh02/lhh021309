@@ -23,16 +23,16 @@ npm install
 3. (선택) `supabase/seed_master_ingredients.sql` 실행 — 공용 재료 목록에 이름/카테고리/단위만 채워진 시작 데이터를 넣습니다 (가격은 비어있음, 아래 KAMIS 연동으로 채움)
 4. `.env.example`을 `.env.local`로 복사하고 Supabase 프로젝트의 URL/키를 채워넣기 (Project Settings → API)
 
-### (선택) KAMIS 공용 재료 가격 연동
+### (선택) 공용 재료 가격 연동 (data.go.kr — 공판장 가격 데이터)
 
 식재료 등록 화면의 "공용 재료에서 가져오기"에 실제 시세를 채우려면:
 
-1. [kamis.or.kr](https://www.kamis.or.kr)에서 회원가입 후 Open-API 신청 → `KAMIS_CERT_KEY`/`KAMIS_CERT_ID` 발급
-2. `src/lib/kamis/item-map.ts`에 실제 품목코드/품종코드/부류코드 채우기 (해당 파일 주석 참고 — 코드가 틀리면 조용히 값이 안 채워지거나 엉뚱한 재료 가격이 들어갈 수 있으니 KAMIS API로 직접 검증 후 채울 것)
-3. `.env.local`에 `KAMIS_CERT_KEY`, `KAMIS_CERT_ID`, `CRON_SECRET` 설정
+1. [data.go.kr](https://www.data.go.kr)에서 "한국농수산식품유통공사_공판장 가격 관련 정보" 활용신청 → 승인 후 "일반 인증키" 발급
+2. `.env.local`에 `KAMIS_ODCLOUD_KEY`(발급받은 인증키), `CRON_SECRET`(임의 문자열) 설정
+3. `src/lib/kamis/item-map.ts`에 매핑 추가 — 새 품목을 추가하려면 먼저 API로 해당 품목명이 실제로 존재하는지 직접 확인할 것 (없는 이름은 조용히 0건만 반환함, 에러 안 남)
 4. 외부 스케줄러(Vercel Cron 등)로 `GET /api/cron/sync-kamis-prices` (헤더: `Authorization: Bearer <CRON_SECRET>`)를 주기적으로 호출
 
-KAMIS는 농산물·축산물·수산물 시세만 제공합니다 — 소스/조미료/포장재는 이 경로로 채울 수 없습니다.
+이 데이터셋은 가락시장 등 공판장에서 거래되는 **청과물(과일·채소)만** 다룹니다 — 축산물·수산물·양곡·소스/조미료는 이 경로로 채울 수 없습니다. 자세한 내용/제약사항은 `src/lib/kamis/client.ts` 상단 주석 참고.
 
 ```bash
 cp .env.example .env.local

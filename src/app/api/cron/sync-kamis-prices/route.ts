@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { fetchDailyPricesByCategory, parseKamisPrice } from "@/lib/kamis/client";
+import { fetchMarketPriceRows, pickReferencePricePerKg } from "@/lib/kamis/client";
 import { KAMIS_ITEM_MAP } from "@/lib/kamis/item-map";
 
 /**
- * Refreshes `master_ingredients.reference_price` from KAMIS for every item
- * in KAMIS_ITEM_MAP (currently empty — see that file). Meant to be hit by an
- * external scheduler (e.g. Vercel Cron) once daily, not by users.
+ * Refreshes `master_ingredients.reference_price` (KRW per kg) for every item
+ * in KAMIS_ITEM_MAP from the odcloud wholesale-market-price dataset. Meant
+ * to be hit by an external scheduler (e.g. Vercel Cron) once daily, not by
+ * users.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -19,39 +20,28 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createServiceRoleClient();
-  const categoryCodes = [...new Set(KAMIS_ITEM_MAP.map((m) => m.categoryCode))];
-
   let synced = 0;
   const errors: string[] = [];
 
-  for (const categoryCode of categoryCodes) {
+  for (const mapping of KAMIS_ITEM_MAP) {
     try {
-      const items = await fetchDailyPricesByCategory(categoryCode);
-      const mappingsInCategory = KAMIS_ITEM_MAP.filter((m) => m.categoryCode === categoryCode);
+      const rows = await fetchMarketPriceRows(mapping.odcloudName);
+      const picked = pickReferencePricePerKg(rows);
 
-      for (const mapping of mappingsInCategory) {
-        const match = items.find((i) => i.item_code === mapping.itemCode && i.kind_code === mapping.kindCode);
-        if (!match) {
-          errors.push(`${mapping.name}: no matching KAMIS row for item ${mapping.itemCode}/${mapping.kindCode}`);
-          continue;
-        }
-
-        const price = parseKamisPrice(match.price);
-        if (price === null) {
-          errors.push(`${mapping.name}: unparseable price "${match.price}"`);
-          continue;
-        }
-
-        const { error } = await supabase
-          .from("master_ingredients")
-          .update({ reference_price: price, price_updated_at: new Date().toISOString() })
-          .eq("name", mapping.name);
-
-        if (error) errors.push(`${mapping.name}: ${error.message}`);
-        else synced += 1;
+      if (!picked) {
+        errors.push(`${mapping.name}: no usable (가락/중등급/kg단위) row found for "${mapping.odcloudName}"`);
+        continue;
       }
+
+      const { error } = await supabase
+        .from("master_ingredients")
+        .update({ reference_price: picked.pricePerKg, price_updated_at: new Date().toISOString() })
+        .eq("name", mapping.name);
+
+      if (error) errors.push(`${mapping.name}: ${error.message}`);
+      else synced += 1;
     } catch (err) {
-      errors.push(`category ${categoryCode}: ${err instanceof Error ? err.message : String(err)}`);
+      errors.push(`${mapping.name}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

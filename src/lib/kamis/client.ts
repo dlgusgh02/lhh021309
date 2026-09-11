@@ -1,85 +1,103 @@
 /**
- * Thin client for the KAMIS (농산물유통정보) Open-API "일별 부류별 도소매가격"
- * endpoint. Requires `KAMIS_CERT_KEY` / `KAMIS_CERT_ID` — issued by KAMIS
- * after signing up and applying for API access at kamis.or.kr (see
- * item-map.ts for the full context / current status).
+ * Client for "한국농수산식품유통공사_공판장 가격 관련 정보" — the wholesale
+ * auction market price dataset, accessed through data.go.kr's odcloud.kr
+ * gateway (NOT KAMIS's own kamis.or.kr API — that requires a separate,
+ * different application; this project only has an approved key for this
+ * odcloud dataset). Requires `KAMIS_ODCLOUD_KEY` ("일반 인증키" from the
+ * data.go.kr application page for this dataset).
  *
- * NOTE: field names below (`condition`, `item_name`, `price`, ...) are
- * documented by KAMIS but have not been verified against a live response in
- * this codebase yet — no API key was available while this was written.
- * Re-check the shape against a real response before relying on it in prod.
+ * Coverage note (verified live 2026-09-11): this dataset only covers fresh
+ * produce sold through auction wholesale markets (가락시장 등) — no meat,
+ * dairy, seafood, grain, or sauces/seasonings. Matching is by exact string
+ * in the `품목` field, which doesn't always match our ingredient names 1:1
+ * (e.g. no "대파" row exists — only "실파"/"쪽파", which are different
+ * products, so they're intentionally NOT auto-substituted). See
+ * item-map.ts for which of our seeded ingredients have a verified match.
+ *
+ * Operational gotcha: data.go.kr republishes this dataset periodically
+ * under a new UDDI path rather than keeping one permanently-live endpoint
+ * (this one's Swagger doc labels it "as of 2026-07-31"). If requests start
+ * returning zero rows for everything, check the dataset's page on
+ * data.go.kr for a fresher UDDI and update ODCLOUD_ENDPOINT below.
  */
 
-const KAMIS_BASE_URL = "https://www.kamis.or.kr/service/price/xml.do";
+const ODCLOUD_ENDPOINT =
+  "https://api.odcloud.kr/api/15134477/v1/uddi:7b8bc4f6-8555-4ea7-9d52-dbd2a2d7d817";
 
-export interface KamisDailyPriceItem {
-  item_name: string;
-  item_code: string;
-  kind_name: string;
-  kind_code: string;
-  unit: string;
-  /** KRW. KAMIS returns this as a comma-formatted string, e.g. "1,200". */
-  price: string;
-  county_name: string;
-  category_code: string;
+export interface OdcloudMarketPriceRow {
+  일자: string;
+  시장명: string;
+  품목: string;
+  단위: string;
+  등급: string;
+  평균가격: number;
+  전일평균가격: number;
+  전년가격: number;
 }
 
-interface KamisDailyPriceResponse {
-  condition: unknown;
-  price: KamisDailyPriceItem[] | { error_code: string; error_message?: string };
+interface OdcloudResponse {
+  page: number;
+  perPage: number;
+  totalCount: number;
+  currentCount: number;
+  matchCount: number;
+  data: OdcloudMarketPriceRow[];
 }
 
 export class KamisApiError extends Error {}
 
-function requireEnv(name: "KAMIS_CERT_KEY" | "KAMIS_CERT_ID"): string {
-  const value = process.env[name];
-  if (!value) throw new KamisApiError(`${name} is not set — KAMIS sync cannot run without it.`);
+function requireEnv(): string {
+  const value = process.env.KAMIS_ODCLOUD_KEY;
+  if (!value) throw new KamisApiError("KAMIS_ODCLOUD_KEY is not set — the price sync cannot run without it.");
   return value;
 }
 
 /**
- * Fetches one category's daily retail/wholesale prices for a given date.
- * @param categoryCode KAMIS `p_item_category_code` (부류코드), e.g. "200" for 채소류.
- * @param regday Date as YYYY-MM-DD; defaults to today.
+ * Fetches every row for one exact 품목 (item) name, most recent first isn't
+ * guaranteed by the API so callers should sort — see pickReferencePricePerKg.
  */
-export async function fetchDailyPricesByCategory(
-  categoryCode: string,
-  regday: string = new Date().toISOString().slice(0, 10),
-): Promise<KamisDailyPriceItem[]> {
-  const params = new URLSearchParams({
-    action: "dailyPriceByCategoryList",
-    p_product_cls_code: "01", // 01 = 소매(retail); 02 = 도매(wholesale) — verified against KAMIS's PeriodProductList param docs
-    p_item_category_code: categoryCode,
-    p_country_code: "1101", // 서울 — used as the national reference price
-    p_regday: regday,
-    p_convert_kg_yn: "N",
-    p_cert_key: requireEnv("KAMIS_CERT_KEY"),
-    p_cert_id: requireEnv("KAMIS_CERT_ID"),
-    p_returntype: "json",
-  });
+export async function fetchMarketPriceRows(itemName: string, perPage = 500): Promise<OdcloudMarketPriceRow[]> {
+  // `cond[품목::EQ]` must be sent as a literal `key=value` pair with EACH side
+  // percent-encoded separately — encoding the whole "key=value" string as one
+  // unit (e.g. via a single encodeURIComponent call) also escapes the `=`
+  // and the server silently fails to parse the filter.
+  const condKey = encodeURIComponent("cond[품목::EQ]");
+  const condValue = encodeURIComponent(itemName);
+  const params = new URLSearchParams({ page: "1", perPage: String(perPage), returnType: "JSON" });
 
-  const res = await fetch(`${KAMIS_BASE_URL}?${params.toString()}`, {
-    // KAMIS data changes daily at most; avoid re-fetching on every request.
+  const res = await fetch(`${ODCLOUD_ENDPOINT}?${params.toString()}&${condKey}=${condValue}`, {
+    headers: { Authorization: `Infuser ${requireEnv()}` },
     next: { revalidate: 3600 },
   });
 
   if (!res.ok) {
-    throw new KamisApiError(`KAMIS API request failed with status ${res.status}`);
+    throw new KamisApiError(`odcloud request failed with status ${res.status} for item "${itemName}"`);
   }
 
-  const data = (await res.json()) as KamisDailyPriceResponse;
-
-  if (!Array.isArray(data.price)) {
-    throw new KamisApiError(
-      `KAMIS API returned an error for category ${categoryCode}: ${JSON.stringify(data.price)}`,
-    );
-  }
-
-  return data.price;
+  const data = (await res.json()) as OdcloudResponse;
+  return data.data ?? [];
 }
 
-/** "1,200" -> 1200. Returns null if the value can't be parsed as a price. */
-export function parseKamisPrice(raw: string): number | null {
-  const parsed = Number(raw.replace(/,/g, ""));
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+/** "10키로망대" -> 10, "1키로" -> 1. Returns null for non-weight units (e.g. "50개") we can't convert to a per-kg price. */
+export function parseKiloUnit(unit: string): number | null {
+  const match = unit.match(/^(\d+)\s*키로/);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Picks one representative row to use as the reference price: 가락 market
+ * (the largest, most liquid auction market), 중 grade (the typical/middle
+ * grade, not premium or reject), a weight-based unit, a positive price, and
+ * the most recent 일자 among what's left. Returns price per kilogram.
+ */
+export function pickReferencePricePerKg(rows: OdcloudMarketPriceRow[]): { pricePerKg: number; asOf: string } | null {
+  const candidates = rows
+    .filter((r) => r.시장명 === "가락" && r.등급 === "중" && r.평균가격 > 0)
+    .map((r) => ({ row: r, kg: parseKiloUnit(r.단위) }))
+    .filter((c): c is { row: OdcloudMarketPriceRow; kg: number } => c.kg !== null)
+    .sort((a, b) => b.row.일자.localeCompare(a.row.일자));
+
+  const top = candidates[0];
+  if (!top) return null;
+  return { pricePerKg: Math.round(top.row.평균가격 / top.kg), asOf: top.row.일자 };
 }
