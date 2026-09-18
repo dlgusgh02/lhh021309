@@ -84,20 +84,36 @@ export function parseKiloUnit(unit: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
+export interface ReferencePrice {
+  price: number;
+  /** The unit the price is FOR — either "kg" (converted) or the exact 단위 string matched (e.g. "50개", "100속"). */
+  unit: string;
+  asOf: string;
+}
+
 /**
  * Picks one representative row to use as the reference price: 가락 market
  * (the largest, most liquid auction market), 중 grade (the typical/middle
- * grade, not premium or reject), a weight-based unit, a positive price, and
- * the most recent 일자 among what's left. Returns price per kilogram.
+ * grade, not premium or reject), a positive price, and the most recent 일자
+ * among what's left.
+ *
+ * Not every item is sold by weight (깻잎 comes in "100속" bundles, 오이 in
+ * "50개" counts, not "키로") — pass `unit` to match that exact 단위 string
+ * as-is (price is NOT converted, it's per that literal unit). Omit it to
+ * require a weight-based (키로) unit and get a price normalized per kg.
  */
-export function pickReferencePricePerKg(rows: OdcloudMarketPriceRow[]): { pricePerKg: number; asOf: string } | null {
-  const candidates = rows
-    .filter((r) => r.시장명 === "가락" && r.등급 === "중" && r.평균가격 > 0)
+export function pickReferencePrice(rows: OdcloudMarketPriceRow[], unit?: string): ReferencePrice | null {
+  const base = rows.filter((r) => r.시장명 === "가락" && r.등급 === "중" && r.평균가격 > 0);
+
+  if (unit) {
+    const top = base.filter((r) => r.단위 === unit).sort((a, b) => b.일자.localeCompare(a.일자))[0];
+    return top ? { price: top.평균가격, unit, asOf: top.일자 } : null;
+  }
+
+  const top = base
     .map((r) => ({ row: r, kg: parseKiloUnit(r.단위) }))
     .filter((c): c is { row: OdcloudMarketPriceRow; kg: number } => c.kg !== null)
-    .sort((a, b) => b.row.일자.localeCompare(a.row.일자));
+    .sort((a, b) => b.row.일자.localeCompare(a.row.일자))[0];
 
-  const top = candidates[0];
-  if (!top) return null;
-  return { pricePerKg: Math.round(top.row.평균가격 / top.kg), asOf: top.row.일자 };
+  return top ? { price: Math.round(top.row.평균가격 / top.kg), unit: "kg", asOf: top.row.일자 } : null;
 }

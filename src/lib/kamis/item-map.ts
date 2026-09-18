@@ -18,6 +18,17 @@ export interface KamisItemMapping {
   name: string;
   /** The exact `품목` value to query the odcloud dataset for. */
   odcloudName: string;
+  /**
+   * The `master_ingredients.reference_unit` this price is denominated in.
+   * Omit for the default "kg" (per-kilogram, converted from whatever
+   * weight-based 단위 the dataset uses). Set explicitly for items only sold
+   * by count/bundle in this dataset (e.g. "50개", "100속") — the sync then
+   * matches that exact 단위 and stores the price as-is, unconverted. Must
+   * match the `reference_unit` the ingredient is seeded with in
+   * supabase/seed_master_ingredients.sql, or the price and its displayed
+   * unit will silently disagree.
+   */
+  unit?: string;
 }
 
 export const KAMIS_ITEM_MAP: KamisItemMapping[] = [
@@ -30,10 +41,19 @@ export const KAMIS_ITEM_MAP: KamisItemMapping[] = [
   { name: "상추", odcloudName: "상추" },
   { name: "배추", odcloudName: "배추" },
   { name: "버섯(느타리)", odcloudName: "느타리버섯" },
+  // Not sold by weight in this dataset (100속/50개 bundles/counts) — priced
+  // as-is per that unit, not converted to kg. reference_unit for these two
+  // must be "100속"/"50개" respectively, not "kg".
+  { name: "깻잎", odcloudName: "깻잎", unit: "100속" },
+  // "오이" in the dataset is listed by variety, not the generic name;
+  // 취청 is the most commonly traded variety, so used as the representative
+  // one (same product, one cultivar picked — unlike 대파/마늘 below, this
+  // isn't substituting a different product).
+  { name: "오이", odcloudName: "취청오이", unit: "50개" },
 
-  // Confirmed NOT present in this dataset as of 2026-09-11 (checked live,
+  // Confirmed NOT present in this dataset as of 2026-09-18 (checked live,
   // not guessed) — leave unmapped rather than substitute a different
-  // product: 대파 (only 실파/쪽파 exist, different items), 마늘/깐마늘, 오이,
-  // 두부, 돼지고기, 쌀, 계란, 고등어. Any seeded ingredient not listed above
-  // simply hasn't been checked yet.
+  // product: 대파 (only 실파/쪽파 exist, different items), 마늘 (both "깐마늘"
+  // and "통마늘" checked), 생강, 건고추, 두부, 돼지고기, 쌀, 계란, 고등어.
+  // Any seeded ingredient not listed above simply hasn't been checked yet.
 ];
