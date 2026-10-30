@@ -65,9 +65,14 @@ export async function fetchMarketPriceRows(itemName: string, perPage = 500): Pro
   const condValue = encodeURIComponent(itemName);
   const params = new URLSearchParams({ page: "1", perPage: String(perPage), returnType: "JSON" });
 
+  // Explicitly uncached: this is called from a cron route, not a rendered
+  // page, and Next's fetch data-cache write failing (e.g. no disk space)
+  // surfaces as an opaque "TypeError: fetch failed" unrelated to the actual
+  // request — hit this for real in src/lib/ekape/client.ts (same pattern)
+  // while disk was critically low; fixed there and here for consistency.
   const res = await fetch(`${ODCLOUD_ENDPOINT}?${params.toString()}&${condKey}=${condValue}`, {
     headers: { Authorization: `Infuser ${requireEnv()}` },
-    next: { revalidate: 3600 },
+    cache: "no-store",
   });
 
   if (!res.ok) {
