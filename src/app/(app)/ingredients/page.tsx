@@ -18,7 +18,7 @@ export default async function IngredientsPage() {
         title="식재료"
         description="식재료를 등록하면 단위 원가가 자동으로 계산됩니다."
         action={
-          <Button render={<Link href="/ingredients/new" />} nativeButton={false}>
+          <Button render={<Link href="/ingredients/new" data-tutorial="add-ingredient" />} nativeButton={false}>
             <Plus className="size-4" />
             식재료 추가
           </Button>

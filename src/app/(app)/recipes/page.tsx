@@ -27,7 +27,7 @@ export default async function RecipesPage() {
         title="레시피"
         description="레시피에 재료를 추가하면 원가와 원가율이 자동으로 계산됩니다."
         action={
-          <Button render={<Link href="/recipes/new" />} nativeButton={false}>
+          <Button render={<Link href="/recipes/new" data-tutorial="add-recipe" />} nativeButton={false}>
             <Plus className="size-4" />
             레시피 만들기
           </Button>
