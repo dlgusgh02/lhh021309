@@ -14,20 +14,16 @@
  * this dataset doesn't cover poultry, eggs, or dairy at all despite the
  * agency's name suggesting broader livestock coverage.
  *
- * Verification note: the full fetch -> parse -> pick pipeline was proven
- * correct with a standalone Node script hitting the real API directly
- * (worked cleanly, 4/4 requests). The *same* logic called from inside this
- * project's `next dev` process failed every time with a generic
- * "TypeError: fetch failed" and no useful cause/stack -- reproduced even
- * after full process restarts and cache clears, and reproduced identically
- * on the already-working KAMIS odcloud sync route too, so it isn't specific
- * to this file. Strong circumstantial evidence points to the host's disk
- * space crisis (see disk_space_crisis memory) breaking something in Next's
- * dev-mode fetch instrumentation even with `cache: "no-store"` set -- but
- * this was never confirmed by directly observing recovery after a disk fix,
- * only inferred. Re-verify the live `/api/cron/sync-ekape-prices` route
- * end-to-end once disk space is comfortably free, and update this note
- * either way.
+ * Verification note (2026-11-06): the fetch -> parse -> pick pipeline in
+ * *this file* is fine and was never the actual problem — a disk-space
+ * theory floated in an earlier session was wrong. The route's
+ * "TypeError: fetch failed" comes from the *Supabase* update call right
+ * after this client returns a price, not from eKAPE: the project's own
+ * Supabase hostname currently fails to resolve at all
+ * (`getaddrinfo ENOTFOUND <ref>.supabase.co`, confirmed NXDOMAIN against
+ * Google/Cloudflare DNS too, so not a local resolver fluke) — see
+ * [[project_foodcostlab]] for the live-Supabase-outage note. Re-run this
+ * route once Supabase connectivity is confirmed restored.
  */
 
 const EKAPE_ENDPOINT = "http://data.ekape.or.kr/openapi-data/service/user/grade/consumerPriceDaily";
