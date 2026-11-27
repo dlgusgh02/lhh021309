@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -43,12 +43,10 @@ export function IngredientForm({ ingredient }: { ingredient?: Ingredient }) {
     },
   });
 
-  const [watchedPrice, watchedQuantity, purchaseUnit, watchedYieldRate] = form.watch([
-    "purchasePrice",
-    "purchaseQuantity",
-    "purchaseUnit",
-    "yieldRate",
-  ]);
+  const [watchedPrice, watchedQuantity, purchaseUnit, watchedYieldRate] = useWatch({
+    control: form.control,
+    name: ["purchasePrice", "purchaseQuantity", "purchaseUnit", "yieldRate"],
+  });
   const purchasePrice = Number(watchedPrice);
   const purchaseQuantity = Number(watchedQuantity);
   const yieldRate = Number(watchedYieldRate);

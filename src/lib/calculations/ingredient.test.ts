@@ -9,6 +9,11 @@ import {
 import { IncompatibleUnitError } from "@/lib/units/conversions";
 
 describe("calculateUnitCost", () => {
+  it("calculates fractional use of catalog bundles without guessing a weight", () => {
+    expect(calculateUsageCostFromPurchase({ purchasePrice: 20000, purchaseQuantity: 1, purchaseUnit: "50개", yieldRate: 100 }, 0.1, "50개")).toBe(2000);
+    expect(calculateUsageCostFromPurchase({ purchasePrice: 30000, purchaseQuantity: 1, purchaseUnit: "100속", yieldRate: 100 }, 0.01, "100속")).toBe(300);
+    expect(() => calculateUsageCostFromPurchase({ purchasePrice: 20000, purchaseQuantity: 1, purchaseUnit: "50개", yieldRate: 100 }, 1, "kg")).toThrow(IncompatibleUnitError);
+  });
   it("computes 돼지고기 18,000원/1000g = 18원/g", () => {
     expect(calculateUnitCost(18000, 1000)).toBe(18);
   });

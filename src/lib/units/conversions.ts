@@ -12,14 +12,14 @@
 
 export type WeightUnit = "mg" | "g" | "kg";
 export type VolumeUnit = "ml" | "l";
-export type CountUnit = "ea" | "piece" | "pack" | "bottle" | "can";
+export type CountUnit = "ea" | "piece" | "pack" | "bottle" | "can" | "50개" | "100속";
 export type Unit = WeightUnit | VolumeUnit | CountUnit;
 
 export type UnitCategory = "weight" | "volume" | "count";
 
 const WEIGHT_UNITS: readonly WeightUnit[] = ["mg", "g", "kg"];
 const VOLUME_UNITS: readonly VolumeUnit[] = ["ml", "l"];
-const COUNT_UNITS: readonly CountUnit[] = ["ea", "piece", "pack", "bottle", "can"];
+const COUNT_UNITS: readonly CountUnit[] = ["ea", "piece", "pack", "bottle", "can", "50개", "100속"];
 
 /** Grams per unit of weight. */
 const WEIGHT_TO_GRAM: Record<WeightUnit, number> = {
@@ -138,4 +138,6 @@ export const UNIT_OPTIONS: { value: Unit; label: string; category: UnitCategory 
   { value: "pack", label: "팩", category: "count" },
   { value: "bottle", label: "병", category: "count" },
   { value: "can", label: "캔", category: "count" },
+  { value: "50개", label: "50개 묶음", category: "count" },
+  { value: "100속", label: "100속 묶음", category: "count" },
 ];
