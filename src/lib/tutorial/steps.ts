@@ -23,7 +23,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: "nav-ingredients",
     path: "/dashboard",
     title: "1단계 — 식재료 등록",
-    body: "먼저 재료를 등록해야 원가를 계산할 수 있어요. 왼쪽 메뉴의 '식재료'로 이동해볼게요.",
+    body: "먼저 재료를 등록해야 원가를 계산할 수 있어요. '식재료' 메뉴는 PC에서는 왼쪽, 모바일에서는 상단 메뉴 버튼에서 찾을 수 있어요. 다음을 누르면 이동해요.",
     target: "nav-/ingredients",
     placement: "right",
   },
