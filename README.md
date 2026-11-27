@@ -57,7 +57,7 @@ npm run dev
 ```bash
 npm run test        # Vitest — 계산 엔진 단위 테스트 (77 tests)
 npm run test:watch  # watch 모드
-npx tsc --noEmit    # 타입 체크
+npm run typecheck   # Next.js 경로 타입 생성 후 타입 체크
 npm run lint         # ESLint
 npm run build        # 프로덕션 빌드
 ```
@@ -86,3 +86,25 @@ supabase/schema.sql          DB 스키마 + RLS + 트리거
 - `recipe_ingredients`에는 계산된 원가를 저장하지 않습니다 — 식재료 가격이 바뀌면 다음 조회 시 항상 최신 가격으로 재계산됩니다.
 - `src/types/database.ts`의 `Prettify<T>` 래퍼는 필수입니다: Row/Insert/Update를 이름 붙은 `interface`로 직접 참조하면 `@supabase/postgrest-js`의 제네릭 추론이 `never`로 무너지는 버그가 있어 우회한 것입니다 (파일 내 주석 참고).
 - Next.js 16부터 `middleware.ts`가 `proxy.ts`로 이름이 바뀌었습니다 (`proxy.ts` 참고).
+
+## 참고 가격 출처·조사일
+
+기존 DB는 `supabase/migrations/20261106_reference_price_metadata.sql`을 Supabase SQL Editor에서 먼저 실행한 후 새 동기화 코드를 배포합니다. 신규 DB는 최신 `supabase/schema.sql`에 해당 컬럼이 포함되어 있습니다. 기존 가격의 출처·조사일은 추측해 채우지 않으며, 다음 정상 동기화부터 저장됩니다.
+
+`price_as_of`는 제공기관의 조사일, `price_updated_at`은 앱의 동기화 시각입니다. 세 동기화 경로는 참고 가격과 출처·시장·등급을 함께 갱신하고 실제 갱신된 행이 한 개일 때만 성공으로 집계합니다.
+
+- `/api/cron/sync-kamis-prices`: KAMIS 공판장, 11개 매핑
+- `/api/cron/sync-ekape-prices`: eKAPE 축산물, 3개 매핑
+- `/api/cron/sync-kamis-perday-prices`: KAMIS 일별 도·소매, 10개 매핑
+
+모든 경로는 `Authorization: Bearer <CRON_SECRET>` 헤더가 필요합니다. 외부 스케줄러는 별도로 설정해야 합니다. 매핑 개수는 실제 동기화 성공 개수와 다를 수 있으므로 응답의 `synced`와 `errors`를 확인합니다.
+
+공용 재료에서 가져온 가격은 구매가의 초기 입력값입니다. 이후 시세 동기화가 사용자의 저장된 구매가를 덮어쓰지는 않습니다. `50개`·`100속`은 묶음 단위로 입력하며, 예를 들어 50개 중 5개 사용은 `0.1 × 50개`로 입력합니다. 무게나 다른 수량 단위로 자동 환산하지 않습니다.
+
+## 레시피 데이터 무결성
+
+기존 DB에는 `supabase/migrations/20261106_recipe_integrity.sql`을 실행한 후 새 레시피 코드를 배포합니다. 신규 DB용 `schema.sql`에도 같은 함수와 정책이 포함되어 있습니다. 레시피 복제는 `duplicate_recipe` RPC 한 번으로 본문·재료·추가 비용을 복사합니다. 도중에 오류가 나면 전체 복사를 롤백하며, 함수 미설치 시 개별 INSERT로 우회하지 않습니다. 이미지는 복사하고 즐겨찾기는 초기화합니다.
+
+재료 추가는 서버에서 현재 매장의 레시피·식재료인지 확인하고 계산 엔진과 동일한 단위 변환 규칙으로 검증합니다. DB의 RLS도 다른 매장 식재료의 연결을 차단합니다. 재료·추가 비용 삭제는 해당 레시피와 항목 ID를 함께 확인하며 일치하는 항목이 없으면 실패를 반환합니다.
+
+개발용 Supabase에서 `supabase/tests/recipe_integrity.sql` 전체를 실행하면 실제 DB의 복사 결과·소유권 차단·실패 시 전체 롤백을 검증할 수 있습니다. 스크립트는 마지막에 테스트 데이터와 임시 트리거를 모두 롤백합니다. Vitest의 RPC 모킹 테스트와 별도로 실행해야 합니다.
