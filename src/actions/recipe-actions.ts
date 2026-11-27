@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStoreId } from "@/lib/supabase/dal";
+import { convertUnit } from "@/lib/units/conversions";
 import {
   extraCostSchema,
   recipeFormSchema,
@@ -76,6 +77,11 @@ function toRecipe(row: RecipeRowWithJoins): Recipe {
 }
 
 const RECIPE_SELECT = "*, recipe_ingredients(*, ingredient:ingredients(*)), extra_costs(*)";
+
+async function requireOwnedRecipe(supabase: Awaited<ReturnType<typeof createClient>>, recipeId: string, storeId: string) {
+  const { data, error } = await supabase.from("recipes").select("id").eq("id", recipeId).eq("store_id", storeId).single();
+  if (error || !data) throw new Error("레시피를 찾을 수 없습니다.");
+}
 
 export async function getRecipes(): Promise<ActionResult<Recipe[]>> {
   try {
@@ -222,57 +228,14 @@ export async function duplicateRecipe(id: string): Promise<ActionResult<{ id: st
     const storeId = await requireStoreId();
     const supabase = await createClient();
 
-    const { data: source, error: fetchError } = await supabase
-      .from("recipes")
-      .select(RECIPE_SELECT)
-      .eq("id", id)
-      .eq("store_id", storeId)
-      .single();
-
-    if (fetchError || !source) return { success: false, error: "레시피를 찾을 수 없습니다." };
-    const original = source as unknown as RecipeRowWithJoins;
-
-    const { data: copy, error: insertError } = await supabase
-      .from("recipes")
-      .insert({
-        store_id: storeId,
-        name: `${original.name} (복사본)`,
-        category: original.category,
-        description: original.description,
-        servings: original.servings,
-        selling_price: original.selling_price,
-      })
-      .select("id")
-      .single();
-
-    if (insertError || !copy) return { success: false, error: insertError?.message ?? "레시피 복제에 실패했습니다." };
-    const newId = copy.id as string;
-
-    if (original.recipe_ingredients.length > 0) {
-      const { error } = await supabase.from("recipe_ingredients").insert(
-        original.recipe_ingredients.map((ri) => ({
-          recipe_id: newId,
-          ingredient_id: ri.ingredient_id,
-          quantity: ri.quantity,
-          unit: ri.unit,
-        })),
-      );
-      if (error) return { success: false, error: error.message };
-    }
-
-    if (original.extra_costs.length > 0) {
-      const { error } = await supabase.from("extra_costs").insert(
-        original.extra_costs.map((ec) => ({
-          recipe_id: newId,
-          name: ec.name,
-          amount: ec.amount,
-          cost_type: ec.cost_type,
-        })),
-      );
-      if (error) return { success: false, error: error.message };
+    // One RPC transaction: a child insert failure rolls the entire copy back.
+    const { data: newId, error } = await supabase.rpc("duplicate_recipe", { p_recipe_id: id, p_store_id: storeId });
+    if (error || !newId) {
+      return { success: false, error: error?.message ?? "레시피 복제에 실패했습니다." };
     }
 
     revalidatePath("/recipes");
+    revalidatePath("/dashboard");
     return { success: true, data: { id: newId } };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "레시피 복제에 실패했습니다." };
@@ -330,8 +293,14 @@ export async function addRecipeIngredient(recipeId: string, formData: FormData):
   }
 
   try {
-    await requireStoreId(); // ensures caller owns a store; RLS enforces the recipe itself
+    const storeId = await requireStoreId();
     const supabase = await createClient();
+    await requireOwnedRecipe(supabase, recipeId, storeId);
+    const { data: ingredient, error: ingredientError } = await supabase.from("ingredients")
+      .select("purchase_unit").eq("id", parsed.data.ingredientId).eq("store_id", storeId).single();
+    if (ingredientError || !ingredient) return { success: false, error: "식재료를 찾을 수 없습니다." };
+    // Validate using the same conversion rules used by the cost engine.
+    convertUnit(parsed.data.quantity, parsed.data.unit, ingredient.purchase_unit);
     const { error } = await supabase.from("recipe_ingredients").insert({
       recipe_id: recipeId,
       ingredient_id: parsed.data.ingredientId,
@@ -343,21 +312,78 @@ export async function addRecipeIngredient(recipeId: string, formData: FormData):
 
     revalidatePath(`/recipes/${recipeId}`);
     revalidatePath("/recipes");
+    revalidatePath("/dashboard");
     return { success: true, data: null };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "재료 추가에 실패했습니다." };
   }
 }
 
-export async function removeRecipeIngredient(recipeId: string, recipeIngredientId: string): Promise<ActionResult<null>> {
+export async function updateRecipeIngredient(
+  recipeId: string,
+  recipeIngredientId: string,
+  formData: FormData,
+): Promise<ActionResult<null>> {
+  const parsed = recipeIngredientSchema.omit({ ingredientId: true }).safeParse({
+    quantity: formData.get("quantity"),
+    unit: formData.get("unit"),
+  });
+
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "입력값을 확인해주세요." };
+  }
+
   try {
-    await requireStoreId();
+    const storeId = await requireStoreId();
     const supabase = await createClient();
-    const { error } = await supabase.from("recipe_ingredients").delete().eq("id", recipeIngredientId);
+    await requireOwnedRecipe(supabase, recipeId, storeId);
+    const { data: existing, error: existingError } = await supabase
+      .from("recipe_ingredients")
+      .select("ingredient_id")
+      .eq("id", recipeIngredientId)
+      .eq("recipe_id", recipeId)
+      .single();
+    if (existingError || !existing) return { success: false, error: "레시피 재료를 찾을 수 없습니다." };
+    const { data: ingredient, error: ingredientError } = await supabase
+      .from("ingredients")
+      .select("purchase_unit")
+      .eq("id", existing.ingredient_id)
+      .single();
+    if (ingredientError || !ingredient) return { success: false, error: "식재료를 찾을 수 없습니다." };
+    // Validate using the same conversion rules used by the cost engine.
+    convertUnit(parsed.data.quantity, parsed.data.unit, ingredient.purchase_unit);
+
+    const { data, error } = await supabase
+      .from("recipe_ingredients")
+      .update({ quantity: parsed.data.quantity, unit: parsed.data.unit })
+      .eq("id", recipeIngredientId)
+      .eq("recipe_id", recipeId)
+      .select("id");
+
     if (error) return { success: false, error: error.message };
+    if (data?.length !== 1) return { success: false, error: "레시피 재료를 찾을 수 없습니다." };
 
     revalidatePath(`/recipes/${recipeId}`);
     revalidatePath("/recipes");
+    revalidatePath("/dashboard");
+    return { success: true, data: null };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "재료 수정에 실패했습니다." };
+  }
+}
+
+export async function removeRecipeIngredient(recipeId: string, recipeIngredientId: string): Promise<ActionResult<null>> {
+  try {
+    const storeId = await requireStoreId();
+    const supabase = await createClient();
+    await requireOwnedRecipe(supabase, recipeId, storeId);
+    const { data, error } = await supabase.from("recipe_ingredients").delete().eq("id", recipeIngredientId).eq("recipe_id", recipeId).select("id");
+    if (error) return { success: false, error: error.message };
+    if (data?.length !== 1) return { success: false, error: "레시피 재료를 찾을 수 없습니다." };
+
+    revalidatePath(`/recipes/${recipeId}`);
+    revalidatePath("/recipes");
+    revalidatePath("/dashboard");
     return { success: true, data: null };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "재료 삭제에 실패했습니다." };
@@ -380,8 +406,9 @@ export async function addExtraCost(recipeId: string, formData: FormData): Promis
   }
 
   try {
-    await requireStoreId();
+    const storeId = await requireStoreId();
     const supabase = await createClient();
+    await requireOwnedRecipe(supabase, recipeId, storeId);
     const { error } = await supabase.from("extra_costs").insert({
       recipe_id: recipeId,
       name: parsed.data.name,
@@ -393,6 +420,7 @@ export async function addExtraCost(recipeId: string, formData: FormData): Promis
 
     revalidatePath(`/recipes/${recipeId}`);
     revalidatePath("/recipes");
+    revalidatePath("/dashboard");
     return { success: true, data: null };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "추가 비용 등록에 실패했습니다." };
@@ -401,13 +429,16 @@ export async function addExtraCost(recipeId: string, formData: FormData): Promis
 
 export async function removeExtraCost(recipeId: string, extraCostId: string): Promise<ActionResult<null>> {
   try {
-    await requireStoreId();
+    const storeId = await requireStoreId();
     const supabase = await createClient();
-    const { error } = await supabase.from("extra_costs").delete().eq("id", extraCostId);
+    await requireOwnedRecipe(supabase, recipeId, storeId);
+    const { data, error } = await supabase.from("extra_costs").delete().eq("id", extraCostId).eq("recipe_id", recipeId).select("id");
     if (error) return { success: false, error: error.message };
+    if (data?.length !== 1) return { success: false, error: "추가 비용을 찾을 수 없습니다." };
 
     revalidatePath(`/recipes/${recipeId}`);
     revalidatePath("/recipes");
+    revalidatePath("/dashboard");
     return { success: true, data: null };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "추가 비용 삭제에 실패했습니다." };

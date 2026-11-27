@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,7 +12,7 @@ import { UnitSelect } from "@/components/common/unit-select";
 import { IngredientCombobox } from "@/components/ingredients/ingredient-combobox";
 import { calculateUsageCostFromPurchase, IncompatibleUnitError } from "@/lib/calculations";
 import { formatKRW } from "@/lib/utils/currency";
-import { addRecipeIngredient, removeRecipeIngredient } from "@/actions/recipe-actions";
+import { addRecipeIngredient, removeRecipeIngredient, updateRecipeIngredient } from "@/actions/recipe-actions";
 import type { Ingredient, RecipeIngredient } from "@/types";
 
 interface RecipeIngredientEditorProps {
@@ -31,6 +31,9 @@ export function RecipeIngredientEditor({
   const [ingredientId, setIngredientId] = useState("");
   const [quantity, setQuantity] = useState<number | "">("");
   const [unit, setUnit] = useState("g");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editQuantity, setEditQuantity] = useState<number | "">("");
+  const [editUnit, setEditUnit] = useState("g");
 
   const selectedIngredient = availableIngredients.find((i) => i.id === ingredientId);
 
@@ -86,6 +89,36 @@ export function RecipeIngredientEditor({
     });
   }
 
+  function startEdit(ri: RecipeIngredient) {
+    setEditingId(ri.id);
+    setEditQuantity(ri.quantity);
+    setEditUnit(ri.unit);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  function handleSaveEdit(recipeIngredientId: string) {
+    if (!editQuantity) {
+      toast.error("사용량을 입력해주세요.");
+      return;
+    }
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set("quantity", String(editQuantity));
+      formData.set("unit", editUnit);
+
+      const result = await updateRecipeIngredient(recipeId, recipeIngredientId, formData);
+      if (result.success) {
+        setEditingId(null);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="overflow-x-auto rounded-lg border">
@@ -96,7 +129,7 @@ export function RecipeIngredientEditor({
               <TableHead className="text-right">사용량</TableHead>
               <TableHead className="text-right">단위 원가</TableHead>
               <TableHead className="text-right">사용 원가</TableHead>
-              <TableHead className="w-12" />
+              <TableHead className="w-20" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -109,11 +142,30 @@ export function RecipeIngredientEditor({
             )}
             {recipeIngredients.map((ri) => {
               const { cost, error } = lineCost(ri);
+              const isEditing = editingId === ri.id;
               return (
                 <TableRow key={ri.id}>
                   <TableCell className="font-medium">{ri.ingredient?.name ?? "-"}</TableCell>
                   <TableCell className="text-right">
-                    {ri.quantity} {ri.unit}
+                    {isEditing ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <Input
+                          type="number"
+                          min={0}
+                          autoFocus
+                          className="w-20 text-right"
+                          value={editQuantity}
+                          onChange={(e) => setEditQuantity(e.target.valueAsNumber || "")}
+                        />
+                        <div className="w-20 shrink-0">
+                          <UnitSelect value={editUnit} onChange={setEditUnit} />
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {ri.quantity} {ri.unit}
+                      </>
+                    )}
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground">
                     {ri.ingredient
@@ -124,15 +176,43 @@ export function RecipeIngredientEditor({
                     {error ? <span className="text-destructive text-xs">{error}</span> : formatKRW(cost)}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={isPending}
-                      onClick={() => handleRemove(ri.id)}
-                      aria-label="재료 삭제"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    {isEditing ? (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={isPending}
+                          onClick={() => handleSaveEdit(ri.id)}
+                          aria-label="수정 저장"
+                        >
+                          <Check className="size-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" disabled={isPending} onClick={cancelEdit} aria-label="수정 취소">
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={isPending}
+                          onClick={() => startEdit(ri)}
+                          aria-label="재료 수정"
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={isPending}
+                          onClick={() => handleRemove(ri.id)}
+                          aria-label="재료 삭제"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               );
