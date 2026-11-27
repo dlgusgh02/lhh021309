@@ -251,6 +251,10 @@ export interface IngredientPriceHistoryUpdate {
 }
 
 export interface MasterIngredientRow {
+  price_source: string | null;
+  price_as_of: string | null;
+  price_market: string | null;
+  price_grade: string | null;
   id: string;
   name: string;
   category: string;
@@ -264,6 +268,10 @@ export interface MasterIngredientRow {
 }
 
 export interface MasterIngredientInsert {
+  price_source?: string | null;
+  price_as_of?: string | null;
+  price_market?: string | null;
+  price_grade?: string | null;
   id?: string;
   name: string;
   category?: string;
@@ -277,6 +285,10 @@ export interface MasterIngredientInsert {
 }
 
 export interface MasterIngredientUpdate {
+  price_source?: string | null;
+  price_as_of?: string | null;
+  price_market?: string | null;
+  price_grade?: string | null;
   id?: string;
   name?: string;
   category?: string;
@@ -342,6 +354,11 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      duplicate_recipe: {
+        Args: { p_recipe_id: string; p_store_id: string };
+        Returns: string;
+      };
+    };
   };
 }

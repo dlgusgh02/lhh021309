@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { fetchMarketPriceRows, pickReferencePrice } from "@/lib/kamis/client";
 import { KAMIS_ITEM_MAP } from "@/lib/kamis/item-map";
+import { referencePriceUpdate } from "@/lib/prices/reference-price";
 
 /**
  * Refreshes `master_ingredients.reference_price`/`reference_unit` for every
@@ -34,16 +35,14 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("master_ingredients")
-        .update({
-          reference_price: picked.price,
-          reference_unit: picked.unit,
-          price_updated_at: new Date().toISOString(),
-        })
-        .eq("name", mapping.name);
+        .update(referencePriceUpdate({ amount: picked.price, unit: picked.unit, source: "kamis-auction", asOf: picked.asOf, market: "가락", grade: "중" }))
+        .eq("name", mapping.name)
+        .select("id");
 
       if (error) errors.push(`${mapping.name}: ${error.message}`);
+      else if (data?.length !== 1) errors.push(`${mapping.name}: expected one catalog entry, updated ${data?.length ?? 0}`);
       else synced += 1;
     } catch (err) {
       errors.push(`${mapping.name}: ${err instanceof Error ? err.message : String(err)}`);

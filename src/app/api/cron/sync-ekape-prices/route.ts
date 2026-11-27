@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { fetchLatestConsumerPrice } from "@/lib/ekape/client";
 import { EKAPE_ITEM_MAP } from "@/lib/ekape/item-map";
+import { referencePriceUpdate } from "@/lib/prices/reference-price";
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +34,15 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("master_ingredients")
-        .update({ reference_price: picked.pricePerKg, price_updated_at: new Date().toISOString() })
-        .eq("name", mapping.name);
+        .update(referencePriceUpdate({ amount: picked.pricePerKg, unit: "kg", source: "ekape", asOf: picked.asOf, grade: picked.grade }))
+        .eq("name", mapping.name)
+        .eq("reference_unit", "kg")
+        .select("id");
 
       if (error) errors.push(`${mapping.name}: ${error.message}`);
+      else if (data?.length !== 1) errors.push(`${mapping.name}: expected one kg catalog entry, updated ${data?.length ?? 0}`);
       else synced += 1;
     } catch (err) {
       errors.push(`${mapping.name}: ${err instanceof Error ? err.message : String(err)}`);

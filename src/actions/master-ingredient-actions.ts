@@ -12,6 +12,10 @@ function toMasterIngredient(row: MasterIngredientRow): MasterIngredient {
     referenceUnit: row.reference_unit,
     referencePrice: row.reference_price,
     priceUpdatedAt: row.price_updated_at,
+    priceSource: row.price_source ?? null,
+    priceAsOf: row.price_as_of ?? null,
+    priceMarket: row.price_market ?? null,
+    priceGrade: row.price_grade ?? null,
   };
 }
 

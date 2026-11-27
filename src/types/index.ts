@@ -63,6 +63,10 @@ export interface MasterIngredient {
   referenceUnit: string;
   referencePrice: number | null;
   priceUpdatedAt: string | null;
+  priceSource: string | null;
+  priceAsOf: string | null;
+  priceMarket: string | null;
+  priceGrade: string | null;
 }
 
 export interface IngredientPriceHistory {
